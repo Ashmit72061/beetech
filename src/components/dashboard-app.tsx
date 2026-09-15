@@ -25,6 +25,7 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  MessageCircle,
   Mic,
   Package,
   PackageCheck,
@@ -33,6 +34,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShoppingBag,
+  Send,
   Sparkles,
   Sprout,
   UserRound,
@@ -324,6 +326,7 @@ export default function DashboardApp() {
   const isMobile = useSyncExternalStore(subscribeMobile, getMobile, () => false);
   const [tab, setTab] = useState("Overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [action, setAction] = useState("");
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -395,7 +398,7 @@ export default function DashboardApp() {
         <div className="sidebar-brand"><Brand /><button className="icon-button sidebar-close" onClick={closeSidebar} aria-label="Close navigation"><X size={20} /></button></div>
         <div className="workspace-label"><span>{tr(locale, "Workspace", "कार्यस्थान")}</span><strong>{meta.org}</strong><em>{tr(locale, "Active role", "सक्रिय भूमिका")}: {locale === "hi" ? hindiRoles[role] : meta.label}</em></div>
         <nav className="dashboard-nav" aria-label="Workspace navigation">{navigation.map((item) => { const Icon = navIcons[item] || Home; const active = activeTab === item; return <button type="button" key={item} aria-current={active ? "page" : undefined} className={active ? "active" : ""} onClick={() => { setTab(item); if (isMobile) closeSidebar(); }}><Icon size={19} /><span>{locale === "hi" ? hindiNav[item] || item : item}</span>{item === "Sync Queue" && <em>2</em>}{item === "Work queue" && <em>{labSeed.length}</em>}{item === "Access requests" && <em>{readJson<AuditRequest[]>(AUDIT_REQUESTS_KEY, accessSeed).filter((request) => request.status === "Pending").length}</em>}</button>; })}</nav>
-        <div className="sidebar-support"><HelpCircle size={18} /><div><strong>{tr(locale, "Need support?", "सहायता चाहिए?")}</strong><span>{tr(locale, "Field assistance available", "मैदानी सहायता उपलब्ध")}</span></div></div>
+        <button className="sidebar-support" type="button" onClick={() => setSupportOpen(true)} aria-haspopup="dialog" aria-expanded={supportOpen}><HelpCircle size={18} /><div><strong>{tr(locale, "Need support?", "सहायता चाहिए?")}</strong><span>{tr(locale, "Field assistance available", "मैदानी सहायता उपलब्ध")}</span></div></button>
         <div className="sidebar-profile"><span className={`role-avatar role-${role}`}>{meta.initials}</span><div><strong>{session.person}</strong><span>{tr(locale, "Active", "सक्रिय")}: {meta.label}</span></div><button type="button" onClick={logout} aria-label="Sign out"><LogOut size={18} /></button></div>
       </aside>
       <div className="dashboard-main">
@@ -412,6 +415,13 @@ export default function DashboardApp() {
         </div>
       </div>
       {sidebarOpen && isMobile && <button className="sidebar-scrim" aria-label="Close navigation" onClick={closeSidebar} />}
+      {supportOpen && (
+        <aside className="support-chat" role="dialog" aria-modal="false" aria-labelledby="support-chat-title">
+          <header><span><MessageCircle size={18} /><strong id="support-chat-title">{tr(locale, "BeeTech support", "बीटेक सहायता")}</strong></span><button type="button" onClick={() => setSupportOpen(false)} aria-label={tr(locale, "Close support chat", "सहायता चैट बंद करें")}><X size={19} /></button></header>
+          <div className="support-chat-body"><span className="support-avatar">BT</span><p>{tr(locale, "Hello! Tell us what you need help with and our field support team will get back to you.", "नमस्ते! बताएं कि आपको किस सहायता की आवश्यकता है। हमारी मैदानी सहायता टीम आपसे संपर्क करेगी।")}</p></div>
+          <div className="support-chat-compose"><label className="sr-only" htmlFor="support-message">{tr(locale, "Support message", "सहायता संदेश")}</label><input id="support-message" type="text" placeholder={tr(locale, "Type your message...", "अपना संदेश लिखें...")} /><button type="button" aria-label={tr(locale, "Send message", "संदेश भेजें")}><Send size={18} /></button></div>
+        </aside>
+      )}
       <ActionDialog action={action} locale={locale} onClose={() => setAction("")} onRecord={recordAction} />
       <Toast message={toast.message} />
     </main>

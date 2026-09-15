@@ -12,9 +12,10 @@ import {
   ScanLine,
   ShieldCheck,
   Sprout,
+  X,
 } from "lucide-react";
 import { useState } from "react";
-import { HexPattern } from "@/components/brand";
+import { Brand, HexPattern } from "@/components/brand";
 import { PublicHeader } from "@/components/public-header";
 import { TRACE_ID } from "@/lib/data";
 import { tr, useLocale } from "@/lib/storage";
@@ -22,6 +23,7 @@ import { tr, useLocale } from "@/lib/storage";
 export default function Home() {
   const router = useRouter();
   const [trace, setTrace] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const { locale } = useLocale();
 
   function verify(event: React.FormEvent<HTMLFormElement>) {
@@ -40,7 +42,7 @@ export default function Home() {
             <h1>{tr(locale, "Know the hands.", "मेहनत को जानें।")}<br />{tr(locale, "Trust the honey.", "शहद पर भरोसा करें।")}</h1>
             <p className="hero-lead">{tr(locale, "Follow every jar from a registered hive to independent lab review and responsible bottling. One trace ID holds the story.", "हर जार की यात्रा पंजीकृत छत्ते से स्वतंत्र लैब समीक्षा और जिम्मेदार पैकेजिंग तक देखें। एक ट्रेस आईडी पूरी कहानी बताती है।")}</p>
             <form className="verify-bar" onSubmit={verify}>
-              <ScanLine size={22} aria-hidden="true" />
+              <button className="hero-scanner-trigger" type="button" onClick={() => setScannerOpen(true)} aria-label={tr(locale, "Open QR scanner", "क्यूआर स्कैनर खोलें")} aria-haspopup="dialog"><ScanLine size={22} aria-hidden="true" /></button>
               <label className="sr-only" htmlFor="hero-trace">Bottle trace ID</label>
               <input id="hero-trace" value={trace} onChange={(event) => setTrace(event.target.value)} placeholder={TRACE_ID} required />
               <button type="submit">{tr(locale, "Verify bottle", "बोतल सत्यापित करें")} <ArrowRight size={18} /></button>
@@ -129,10 +131,25 @@ export default function Home() {
         <Link className="button button-light" href="/login">{tr(locale, "Access your workspace", "अपना कार्यस्थान खोलें")} <ArrowRight size={18} /></Link>
       </section>
       <footer className="public-footer">
-        <div><strong>Honey Chain</strong><span>Trusted from hive to home.</span></div>
+        <div><Brand /><span>Trusted from hive to home.</span></div>
         <p>Transparent provenance. Protected livelihoods. Responsible honey.</p>
         <div><Link href="/verify">Verify</Link><Link href="/marketplace">Marketplace</Link><Link href="/login">Sign in</Link></div>
       </footer>
+      {scannerOpen && (
+        <div className="scanner-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setScannerOpen(false); }}>
+          <section className="scanner-dialog" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
+            <header><div><span className="eyebrow">{tr(locale, "Bottle verification", "बोतल सत्यापन")}</span><h2 id="scanner-title">{tr(locale, "Scan the bottle QR code", "बोतल का क्यूआर कोड स्कैन करें")}</h2></div><button type="button" onClick={() => setScannerOpen(false)} aria-label={tr(locale, "Close scanner", "स्कैनर बंद करें")}><X size={21} /></button></header>
+            <div className="scanner-viewport" aria-label={tr(locale, "Animated QR scanner preview", "एनिमेटेड क्यूआर स्कैनर पूर्वावलोकन")}>
+              <span className="scanner-corner corner-top-left" /><span className="scanner-corner corner-top-right" /><span className="scanner-corner corner-bottom-left" /><span className="scanner-corner corner-bottom-right" />
+              <QrCode size={144} strokeWidth={1.4} aria-hidden="true" />
+              <i className="scanner-beam" />
+            </div>
+            <p>{tr(locale, "Place the QR code printed on the bottle label inside the frame.", "बोतल के लेबल पर छपे क्यूआर कोड को फ्रेम के अंदर रखें।")}</p>
+            <Link className="button button-primary button-block scanner-demo-button" href={`/verify?trace=${TRACE_ID}`} onClick={() => setScannerOpen(false)}>{tr(locale, "Try demo bottle", "डेमो बोतल आज़माएँ")} <ArrowRight size={18} /></Link>
+            <small>{tr(locale, "Demo mode opens a sample verified bottle. Camera access is not required.", "डेमो मोड एक नमूना सत्यापित बोतल खोलता है। कैमरा अनुमति आवश्यक नहीं है।")}</small>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

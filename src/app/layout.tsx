@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     template: "%s · Honey Chain",
   },
   description: "Verifiable honey provenance, responsible sourcing and trusted marketplace access across India.",
+  icons: {
+    icon: "/BeeTech.png",
+    apple: "/BeeTech.png",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

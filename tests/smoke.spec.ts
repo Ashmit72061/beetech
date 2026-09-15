@@ -14,6 +14,23 @@ test("dashboard rejects direct access without a valid session", async ({ page })
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
 });
 
+test("landing demo scanner opens a verified bottle result", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open QR scanner" }).click();
+  await expect(page.getByRole("dialog", { name: "Scan the bottle QR code" })).toBeVisible();
+  await page.getByRole("link", { name: "Try demo bottle" }).click();
+  await expect(page).toHaveURL(new RegExp(`/verify\\?trace=${traceId}`));
+  await expect(page.getByRole("heading", { name: "Verified Honey Chain product" })).toBeVisible();
+});
+
+test("workspace support opens a simple chatbox", async ({ page }) => {
+  await useAccount(page, "Beekeeper");
+  await page.getByRole("button", { name: /Need support/ }).click();
+  await expect(page.getByRole("dialog", { name: "BeeTech support" })).toBeVisible();
+  await page.getByRole("button", { name: "Close support chat" }).click();
+  await expect(page.getByRole("dialog", { name: "BeeTech support" })).toHaveCount(0);
+});
+
 test("operational actions persist by account and role", async ({ page }) => {
   await useAccount(page, "Beekeeper");
   await expect(page.getByText("Active role").first()).toBeVisible();

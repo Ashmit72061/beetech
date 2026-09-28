@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
@@ -11,7 +10,6 @@ import {
   Building2,
   Check,
   CheckCircle2,
-  ChevronDown,
   ClipboardCheck,
   Database,
   FileCheck2,
@@ -43,8 +41,12 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Brand } from "@/components/brand";
+import { signOutAction } from "@/app/login/actions";
+import type { AuthenticatedSession } from "@/lib/auth";
 import { BeekeeperView, ManufacturerView } from "@/components/dashboard";
 import { Marketplace } from "@/components/marketplace";
+import { WorkflowPanel } from "@/components/workflow-panel";
+import { TelemetryPanel } from "@/components/telemetry-panel";
 import { Field, Modal, Status, Toast, useToast } from "@/components/ui";
 import { BATCH_ID, listings, money, navByRole, roleMeta, Role, TRACE_ID, traceTimeline, type Listing } from "@/lib/data";
 import {
@@ -52,17 +54,13 @@ import {
   ActivityRecord,
   AUDIT_REQUESTS_KEY,
   AuditRequest,
-  clearSession,
   CUSTOM_LISTINGS_KEY,
   LabRecord,
   MarketplaceOrder,
-  parseSession,
   readJson,
   Session,
-  switchActiveRole,
   tr,
   useLocale,
-  useSession,
   useStoredData,
   writeJson,
 } from "@/lib/storage";
@@ -130,13 +128,13 @@ const hindiRoles: Record<Role, string> = { beekeeper: "मधुमक्खी 
 
 const labSeed: LabRecord[] = [
   {
-    id: "BQL-REQ-884", batchId: BATCH_ID, client: "Madhur Foods", product: "Wild forest raw honey", priority: "High", due: "Today", specimenId: "BQL-SP-884-A", received: "09 Sep · 10:24", seal: "Confirmed", requester: "Rohan Mehta", pollen: "Conforms", moisture: "17.4", adulteration: "Not detected", notes: "Pollen spectrum is consistent with declared wild neem and acacia forage.", certificateName: "", certificateSize: 0, status: "Pending review",
+    id: "BQL-REQ-884", batchId: BATCH_ID, client: "Madhur Foods", product: "Wild forest raw honey", priority: "High", due: "Demo priority 1", specimenId: "BQL-SP-884-A", received: "09 Sep · 10:24", seal: "Confirmed", requester: "Rohan Mehta", pollen: "Conforms", moisture: "17.4", adulteration: "Not detected", notes: "Pollen spectrum is consistent with declared wild neem and acacia forage.", certificateName: "", certificateSize: 0, status: "Pending review",
   },
   {
-    id: "BQL-REQ-881", batchId: "HC-BK228-B260902-01", client: "Pahadi Ras Foods", product: "Litchi blossom raw honey", priority: "Normal", due: "Today", specimenId: "BQL-SP-881-A", received: "08 Sep · 14:12", seal: "Confirmed", requester: "Anil Rawat", pollen: "Conforms", moisture: "18.1", adulteration: "Not detected", notes: "", certificateName: "", certificateSize: 0, status: "Pending review",
+    id: "BQL-REQ-881", batchId: "HC-BK228-B260902-01", client: "Pahadi Ras Foods", product: "Litchi blossom raw honey", priority: "Normal", due: "Demo priority 2", specimenId: "BQL-SP-881-A", received: "08 Sep · 14:12", seal: "Confirmed", requester: "Anil Rawat", pollen: "Conforms", moisture: "18.1", adulteration: "Not detected", notes: "", certificateName: "", certificateSize: 0, status: "Pending review",
   },
   {
-    id: "BQL-REQ-878", batchId: "HC-BK311-B260828-02", client: "Sundar Naturals", product: "Eucalyptus raw honey", priority: "Normal", due: "Tomorrow", specimenId: "BQL-SP-878-A", received: "08 Sep · 09:40", seal: "Confirmed", requester: "Meera Shah", pollen: "Inconclusive", moisture: "19.2", adulteration: "Inconclusive", notes: "Repeat pollen review required.", certificateName: "", certificateSize: 0, status: "Pending review",
+    id: "BQL-REQ-878", batchId: "HC-BK311-B260828-02", client: "Sundar Naturals", product: "Eucalyptus raw honey", priority: "Normal", due: "Demo priority 3", specimenId: "BQL-SP-878-A", received: "08 Sep · 09:40", seal: "Confirmed", requester: "Meera Shah", pollen: "Inconclusive", moisture: "19.2", adulteration: "Inconclusive", notes: "Repeat pollen review required.", certificateName: "", certificateSize: 0, status: "Pending review",
   },
 ];
 
@@ -302,7 +300,7 @@ function AdministratorWorkspace({ tab, toast }: { tab: string; toast: (message: 
   const generic: Record<string, [string, string, string[], string[][]]> = {
     Organisations: ["Organisations", "Verified entities and operating roles across the network.", ["Organisation", "Type", "Location", "Participants", "State"], [["Aravali Madhu Sakhi FPO", "Producer collective", "Dausa, Rajasthan", "24", "Active"], ["Madhur Foods", "Manufacturer", "Jaipur, Rajasthan", "12", "Active"], ["Bharat Quality Labs", "Laboratory", "Jaipur, Rajasthan", "8", "Active"]]],
     "Audit ledger": ["Audit ledger", "Append-only material events with actor, time, source and proof state.", ["Timestamp", "Event", "Object", "Actor", "Proof"], traceTimeline.map((event) => [event.date, event.title, BATCH_ID, event.actor, "Anchored"])],
-    "Blockchain proof": ["Blockchain proof", "Tamper-evident hashes of key events; sensitive operational data remains off-chain.", ["Block", "Anchored", "Events", "Merkle root", "State"], [["HC-78421", "Today, 09:41", "24", "0x6c2a…91f4", "Confirmed"], ["HC-78420", "Today, 09:26", "31", "0xa81d…4c20", "Confirmed"]]],
+    "Blockchain proof": ["Local PoA blockchain", "Persisted append-only blocks commit receipt and event hashes while sensitive data remains off-chain.", ["Network", "Consensus", "Validator", "Committed data", "State"], [["Honey Chain Local", "Proof of authority", "HC-POA-VALIDATOR-01", "Event + receipt hash", "Verified"], ["Privacy boundary", "Off-chain records", "Application roles", "No personal data", "Active"]]],
   };
   const content = generic[tab];
   return <><Intro eyebrow="Network governance" title={content[0]} copy={content[1]} /><section className="panel table-panel"><Table label={content[0]} headers={content[2]} rows={content[3]} /></section></>;
@@ -319,24 +317,20 @@ function ActionDialog({ action, locale, onClose, onRecord }: { action: string; l
   return <Modal open={Boolean(action)} onClose={onClose} title={locale === "hi" ? hindiActions[action] || action : action} eyebrow={tr(locale, "Accountable operation", "जवाबदेह कार्य")}><form className="form-stack" onSubmit={submit}>{isVoice ? <div className="voice-panel"><button type="button" className="voice-record"><Mic size={30} /></button><h3>{tr(locale, "Record a field note", "मैदानी टिप्पणी रिकॉर्ड करें")}</h3><p>{tr(locale, "Review the transcript before saving it to the account record.", "खाता रिकॉर्ड में सहेजने से पहले प्रतिलेख की समीक्षा करें।")}</p><Field label={tr(locale, "Reviewed note", "समीक्षित टिप्पणी")}><textarea name="notes" rows={4} defaultValue="Hive 12 ventilation checked; colony activity is stable." /></Field></div> : isSync ? <div className="sync-panel"><RefreshCw size={36} /><h3>{tr(locale, "Records ready to sync", "रिकॉर्ड सिंक के लिए तैयार")}</h3><p>{tr(locale, "Securely upload records in creation order.", "रिकॉर्ड को निर्माण क्रम में सुरक्षित रूप से अपलोड करें।")}</p></div> : <>{isPublication && <Field label={tr(locale, "Listing title", "लिस्टिंग शीर्षक")}><input name="title" defaultValue={action === "List batch" ? "September wild forest raw honey" : action === "List hive/colony" ? "Apis cerana colony · Hive 49" : "Wild Forest Honey · 500 g"} required data-autofocus /></Field>}<div className="form-grid"><Field label={tr(locale, isPackage ? "Packaged product" : action.includes("hive") ? "Hive identity" : "Batch / material identity", isPackage ? "पैक उत्पाद" : action.includes("hive") ? "छत्ता पहचान" : "बैच / सामग्री पहचान")}><input name="identity" defaultValue={isPackage ? "Wild Forest Honey · 500 g" : action.includes("hive") ? "HC-HIVE-BK102-49" : BATCH_ID} required={!isPublication} /></Field><Field label={tr(locale, isPackage ? "Bottle count" : isPublication ? "Price (INR)" : "Quantity (kg)", isPackage ? "बोतल संख्या" : isPublication ? "मूल्य (INR)" : "मात्रा (किग्रा)")}><input name="quantity" type="number" defaultValue={isPackage ? "420" : isPublication ? action === "List hive/colony" ? "6800" : action === "List batch" ? "385" : "449" : "286"} min="1" required /></Field></div>{isLab && <Field label={tr(locale, "Laboratory", "प्रयोगशाला")}><select name="laboratory" defaultValue="Bharat Quality Labs"><option>Bharat Quality Labs</option><option>National Quality Analytics</option><option>Rajasthan Food Integrity Centre</option></select></Field>}<Field label={tr(locale, "Responsible location", "जिम्मेदार स्थान")}><input name="location" defaultValue={action.includes("processing") || isPackage || action === "Publish packaged honey" ? "Madhur Foods · Jaipur Unit" : "Rajgarh North · Rajasthan"} required /></Field><Field label={tr(locale, "Notes", "टिप्पणियाँ")}><textarea name="notes" rows={4} placeholder={tr(locale, "Add handling, condition or decision notes", "हैंडलिंग, स्थिति या निर्णय टिप्पणी जोड़ें")} /></Field></>}<div className="modal-actions"><button type="button" className="button button-outline" onClick={onClose}>{tr(locale, "Cancel", "रद्द करें")}</button><button type="submit" className="button button-primary">{tr(locale, "Confirm and save", "पुष्टि कर सहेजें")}</button></div></form></Modal>;
 }
 
-export default function DashboardApp() {
-  const router = useRouter();
-  const session = useSession();
+export default function DashboardApp({ session }: { session: AuthenticatedSession }) {
   const { locale, setLocale } = useLocale();
   const isMobile = useSyncExternalStore(subscribeMobile, getMobile, () => false);
   const [tab, setTab] = useState("Overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
   const [action, setAction] = useState("");
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const toast = useToast();
-  const activitiesKey = session ? accountKey(session, "activities") : "";
+  const activeSession: Session = { ...session, accountRole: session.role, activeRole: session.role };
+  const activitiesKey = accountKey(activeSession, "activities");
   const activities = useStoredData(activitiesKey, noActivities);
-
-  useEffect(() => {
-    if (!parseSession(localStorage.getItem("hc:session") || "")) router.replace("/login");
-  }, [router]);
 
   useEffect(() => {
     if (!isMobile || !sidebarOpen) return;
@@ -344,8 +338,6 @@ export default function DashboardApp() {
     return () => { document.body.style.overflow = ""; };
   }, [isMobile, sidebarOpen]);
 
-  if (!session) return <main className="page-loading" aria-live="polite">Checking account access…</main>;
-  const activeSession = session;
   const role = activeSession.activeRole;
   const meta = roleMeta[role];
   const navigation = navByRole[role];
@@ -359,13 +351,8 @@ export default function DashboardApp() {
     setSidebarOpen(false);
     window.requestAnimationFrame(() => menuButton.current?.focus());
   }
-  function chooseRole(next: Role) {
-    switchActiveRole(activeSession, next);
-    setTab(navByRole[next][0]);
-  }
   function logout() {
-    clearSession();
-    router.replace("/login");
+    void signOutAction();
   }
   function showAction(name: string) {
     if (["Review recommendation", "Review inventory proof", "Nectar flow opportunity", "Humidity watch", "Yield confidence"].includes(name)) toast.show("Evidence review opened");
@@ -402,16 +389,19 @@ export default function DashboardApp() {
         <div className="sidebar-profile"><span className={`role-avatar role-${role}`}>{meta.initials}</span><div><strong>{session.person}</strong><span>{tr(locale, "Active", "सक्रिय")}: {meta.label}</span></div><button type="button" onClick={logout} aria-label="Sign out"><LogOut size={18} /></button></div>
       </aside>
       <div className="dashboard-main">
-        <header className="dashboard-topbar"><button ref={menuButton} className="icon-button mobile-dash-menu" onClick={openSidebar} aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="workspace-navigation"><Menu size={21} /></button><div className="active-role-chip"><UserRound size={17} /><span>{tr(locale, "Active role", "सक्रिय भूमिका")}</span><strong>{meta.label}</strong></div><div className="top-actions"><button className="language-toggle" onClick={() => setLocale(locale === "en" ? "hi" : "en")}><Languages size={18} /> {locale === "hi" ? "English" : "हिन्दी"}</button><label className="role-switch"><span className="sr-only">Switch active role</span><UserRound size={17} /><select value={role} onChange={(event) => chooseRole(event.target.value as Role)}>{Object.entries(roleMeta).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select><ChevronDown size={15} /></label><button className="icon-button notification-button" aria-label="Notifications" onClick={() => toast.show("Notifications reviewed")}><Bell size={19} /><i /></button></div></header>
+        <header className="dashboard-topbar"><button ref={menuButton} className="icon-button mobile-dash-menu" onClick={openSidebar} aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="workspace-navigation"><Menu size={21} /></button><div className="active-role-chip"><UserRound size={17} /><span>{tr(locale, "Active role", "सक्रिय भूमिका")}</span><strong>{meta.label}</strong></div><div className="top-actions"><button className="language-toggle" onClick={() => setLocale(locale === "en" ? "hi" : "en")}><Languages size={18} /> {locale === "hi" ? "English" : "हिन्दी"}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => toast.show("Notifications reviewed")}><Bell size={19} /><i /></button></div></header>
         <div className="dashboard-mobile-title"><span>{meta.org}</span><strong>{locale === "hi" ? hindiNav[activeTab] || activeTab : activeTab}</strong></div>
         <div className="dashboard-content">
           {locale === "hi" && <div className="localized-page-title"><span>सक्रिय कार्य</span><h1>{hindiNav[activeTab] || activeTab}</h1><p>{hindiRoles[role]} भूमिका के लिए मुख्य कार्य और रिकॉर्ड</p></div>}
+          <aside className="dashboard-demo-guide" aria-label="Demo scenario guide"><span className="eyebrow">Demo scenario</span><p>{role === "beekeeper" ? "Record a harvest, then publish it." : role === "manufacturer" ? "Start a run, request its lab test, then package the approved result." : role === "lab" ? "Attach a certificate before approving a queued batch." : role === "consumer" ? "Verify the seeded bottle or record a marketplace order." : "Review an access request, then reset only when you need the seed restored."} Counts, dates, projections, and telemetry examples on this workspace are scenario data unless marked server-backed.</p></aside>
           {role === "beekeeper" && <BeekeeperView tab={activeTab} act={showAction} />}
           {role === "manufacturer" && <ManufacturerView tab={activeTab} act={showAction} />}
-          {role === "lab" && <LaboratoryWorkspace tab={activeTab} session={session} toast={toast.show} />}
-          {role === "consumer" && <ConsumerWorkspace tab={activeTab} session={session} />}
-          {role === "admin" && <AdministratorWorkspace tab={activeTab} toast={toast.show} />}
-          <ActivityLedger records={activities} />
+          {role === "lab" && <LaboratoryWorkspace tab={activeTab} session={activeSession} toast={toast.show} />}
+          {role === "consumer" && <ConsumerWorkspace tab={activeTab} session={activeSession} />}
+            {role === "admin" && <AdministratorWorkspace tab={activeTab} toast={toast.show} />}
+            {(role === "beekeeper" || role === "admin") && <TelemetryPanel />}
+            <WorkflowPanel session={session} />
+           <ActivityLedger records={activities} />
         </div>
       </div>
       {sidebarOpen && isMobile && <button className="sidebar-scrim" aria-label="Close navigation" onClick={closeSidebar} />}
@@ -419,7 +409,7 @@ export default function DashboardApp() {
         <aside className="support-chat" role="dialog" aria-modal="false" aria-labelledby="support-chat-title">
           <header><span><MessageCircle size={18} /><strong id="support-chat-title">{tr(locale, "BeeTech support", "बीटेक सहायता")}</strong></span><button type="button" onClick={() => setSupportOpen(false)} aria-label={tr(locale, "Close support chat", "सहायता चैट बंद करें")}><X size={19} /></button></header>
           <div className="support-chat-body"><span className="support-avatar">BT</span><p>{tr(locale, "Hello! Tell us what you need help with and our field support team will get back to you.", "नमस्ते! बताएं कि आपको किस सहायता की आवश्यकता है। हमारी मैदानी सहायता टीम आपसे संपर्क करेगी।")}</p></div>
-          <div className="support-chat-compose"><label className="sr-only" htmlFor="support-message">{tr(locale, "Support message", "सहायता संदेश")}</label><input id="support-message" type="text" placeholder={tr(locale, "Type your message...", "अपना संदेश लिखें...")} /><button type="button" aria-label={tr(locale, "Send message", "संदेश भेजें")}><Send size={18} /></button></div>
+          <form className="support-chat-compose" onSubmit={(event) => { event.preventDefault(); if (!supportMessage.trim()) return; setSupportMessage(""); toast.show("Support message recorded for this demo session"); }}><label className="sr-only" htmlFor="support-message">{tr(locale, "Support message", "सहायता संदेश")}</label><input id="support-message" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} type="text" placeholder={tr(locale, "Type your message...", "अपना संदेश लिखें...")} /><button type="submit" aria-label={tr(locale, "Send message", "संदेश भेजें")} disabled={!supportMessage.trim()}><Send size={18} /></button></form>
         </aside>
       )}
       <ActionDialog action={action} locale={locale} onClose={() => setAction("")} onRecord={recordAction} />

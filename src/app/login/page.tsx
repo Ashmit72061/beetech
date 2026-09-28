@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Brand, HexPattern } from "@/components/brand";
-import { credentials, Role } from "@/lib/data";
-import { signInAccount, tr, useLocale } from "@/lib/storage";
+import { demoAccounts } from "@/lib/data";
+import { tr, useLocale } from "@/lib/storage";
+import { signInAction } from "./actions";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,18 +29,15 @@ export default function LoginPage() {
     }
   }
 
-  function signIn(role: Role, selectedEmail?: string) {
-    if (signInAccount(role, selectedEmail || email)) router.push(destination());
-  }
-
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const account = credentials.find((item) => item.email === email.trim().toLowerCase() && item.password === password);
-    if (!account) {
-      setError("Email or password does not match an available Honey Chain account.");
+    const result = await signInAction({ email, password, next: destination() });
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
-    signIn(account.role, account.email);
+    router.push(result.redirectTo);
+    router.refresh();
   }
 
   return (
@@ -63,7 +61,7 @@ export default function LoginPage() {
           <p>{tr(locale, "Use your organisation credentials or choose an account below.", "अपने संगठन के विवरण का उपयोग करें या नीचे एक खाता चुनें।")}</p>
           <form className="login-form" onSubmit={submit}>
             <label className="field"><span>{tr(locale, "Email address", "ईमेल पता")}</span><input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} placeholder="name@organisation.in" autoComplete="email" required /></label>
-            <label className="field"><span>{tr(locale, "Password", "पासवर्ड")}</span><div className="password-control"><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} placeholder={tr(locale, "Enter your password", "अपना पासवर्ड दर्ज करें")} autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></label>
+            <label className="field"><span>{tr(locale, "Password", "पासवर्ड")}</span><div className="password-control"><input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} placeholder={tr(locale, "Enter your password", "अपना पासवर्ड दर्ज करें")} autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <div className="login-options"><label><input type="checkbox" /> Keep me signed in</label><button type="button" onClick={() => setError("Contact your organisation administrator to reset access securely.")}>Need help?</button></div>
             <button className="button button-primary button-block" type="submit">{tr(locale, "Sign in securely", "सुरक्षित साइन इन करें")} <ArrowRight size={18} /></button>
@@ -71,15 +69,15 @@ export default function LoginPage() {
 
           <div className="account-divider"><span>{tr(locale, "Available role accounts", "उपलब्ध भूमिका खाते")}</span></div>
           <div className="account-grid">
-            {credentials.map((account) => (
+            {demoAccounts.map((account) => (
               <article className="account-card" key={account.role}>
                 <div className={`role-avatar role-${account.role}`}>{account.person.split(" ").map((part) => part[0]).slice(0, 2).join("")}</div>
                 <div className="account-copy"><strong>{account.title}</strong><span>{account.person}</span><small>{account.email}</small></div>
-                <button type="button" onClick={() => signIn(account.role, account.email)}>{tr(locale, "Use account", "खाता उपयोग करें")} <ArrowRight size={15} /></button>
+                <button type="button" onClick={() => { setEmail(account.email); setPassword("honey123"); setError(""); document.getElementById("login-password")?.focus(); }}>{tr(locale, "Use demo account", "डेमो खाता उपयोग करें")} <ArrowRight size={15} /></button>
               </article>
             ))}
           </div>
-          <p className="credential-note">All role accounts use password <code>honey123</code></p>
+          <p className="credential-note">Demo scenario only: each shortcut fills the seeded credentials. Password: <strong>honey123</strong>.</p>
         </div>
       </section>
     </main>

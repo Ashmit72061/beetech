@@ -12,11 +12,11 @@ import {
   ScanLine,
   ShieldCheck,
   Sprout,
-  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Brand, HexPattern } from "@/components/brand";
 import { PublicHeader } from "@/components/public-header";
+import { QrScanner } from "@/components/qr-scanner";
 import { TRACE_ID } from "@/lib/data";
 import { tr, useLocale } from "@/lib/storage";
 
@@ -24,6 +24,7 @@ export default function Home() {
   const router = useRouter();
   const [trace, setTrace] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const scannerTriggerRef = useRef<HTMLButtonElement>(null);
   const { locale } = useLocale();
 
   function verify(event: React.FormEvent<HTMLFormElement>) {
@@ -42,7 +43,7 @@ export default function Home() {
             <h1>{tr(locale, "Know the hands.", "मेहनत को जानें।")}<br />{tr(locale, "Trust the honey.", "शहद पर भरोसा करें।")}</h1>
             <p className="hero-lead">{tr(locale, "Follow every jar from a registered hive to independent lab review and responsible bottling. One trace ID holds the story.", "हर जार की यात्रा पंजीकृत छत्ते से स्वतंत्र लैब समीक्षा और जिम्मेदार पैकेजिंग तक देखें। एक ट्रेस आईडी पूरी कहानी बताती है।")}</p>
             <form className="verify-bar" onSubmit={verify}>
-              <button className="hero-scanner-trigger" type="button" onClick={() => setScannerOpen(true)} aria-label={tr(locale, "Open QR scanner", "क्यूआर स्कैनर खोलें")} aria-haspopup="dialog"><ScanLine size={22} aria-hidden="true" /></button>
+              <button ref={scannerTriggerRef} className="hero-scanner-trigger" type="button" onClick={() => setScannerOpen(true)} aria-label={tr(locale, "Open QR scanner", "क्यूआर स्कैनर खोलें")} aria-haspopup="dialog"><ScanLine size={22} aria-hidden="true" /></button>
               <label className="sr-only" htmlFor="hero-trace">Bottle trace ID</label>
               <input id="hero-trace" value={trace} onChange={(event) => setTrace(event.target.value)} placeholder={TRACE_ID} required />
               <button type="submit">{tr(locale, "Verify bottle", "बोतल सत्यापित करें")} <ArrowRight size={18} /></button>
@@ -55,6 +56,11 @@ export default function Home() {
               <span><CheckCircle2 size={17} /> Tamper-evident record</span>
               <span><CheckCircle2 size={17} /> Protected producer data</span>
             </div>
+            <aside className="demo-guide" aria-label="Three-minute demo guide">
+              <span className="eyebrow">Three-minute judge demo</span>
+              <ol><li>Verify the seeded bottle ID.</li><li>Sign in with any demo role.</li><li>Complete that role&apos;s next server-backed step.</li></ol>
+              <Link className="text-link" href={`/verify?trace=${TRACE_ID}`}>Start with the verified bottle <ArrowRight size={16} /></Link>
+            </aside>
           </div>
           <div className="hero-product" aria-label="Verified Wild Forest Honey bottle">
             <div className="product-orbit orbit-one"><Leaf size={18} /> Wild forest</div>
@@ -75,10 +81,10 @@ export default function Home() {
           </div>
         </div>
         <div className="impact-strip">
-          <div><strong>2,480+</strong><span>registered hives</span></div>
-          <div><strong>18</strong><span>producer collectives</span></div>
-          <div><strong>34,760</strong><span>bottles traceable</span></div>
-          <div><strong>7</strong><span>independent labs</span></div>
+          <div><strong>Demo</strong><span>scenario hive network</span></div>
+          <div><strong>Demo</strong><span>producer collectives</span></div>
+          <div><strong>Demo</strong><span>bottle trace records</span></div>
+          <div><strong>Demo</strong><span>laboratory records</span></div>
         </div>
       </section>
 
@@ -125,6 +131,11 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="brand-clarifier" aria-label="Honey Chain and BeeTech">
+        <span className="eyebrow">Product and platform</span>
+        <p><strong>Honey Chain</strong> is the provenance workflow and public verification experience. <strong>BeeTech</strong> is the technology partner and platform brand shown in the mark.</p>
+      </section>
+
       <section className="landing-cta">
         <HexPattern />
         <div><span className="eyebrow">{tr(locale, "For producers, processors and institutions", "उत्पादकों, प्रसंस्करणकर्ताओं और संस्थानों के लिए")}</span><h2>{tr(locale, "Build trust into every batch.", "हर बैच में भरोसा जोड़ें।")}</h2></div>
@@ -135,21 +146,7 @@ export default function Home() {
         <p>Transparent provenance. Protected livelihoods. Responsible honey.</p>
         <div><Link href="/verify">Verify</Link><Link href="/marketplace">Marketplace</Link><Link href="/login">Sign in</Link></div>
       </footer>
-      {scannerOpen && (
-        <div className="scanner-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setScannerOpen(false); }}>
-          <section className="scanner-dialog" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
-            <header><div><span className="eyebrow">{tr(locale, "Bottle verification", "बोतल सत्यापन")}</span><h2 id="scanner-title">{tr(locale, "Scan the bottle QR code", "बोतल का क्यूआर कोड स्कैन करें")}</h2></div><button type="button" onClick={() => setScannerOpen(false)} aria-label={tr(locale, "Close scanner", "स्कैनर बंद करें")}><X size={21} /></button></header>
-            <div className="scanner-viewport" aria-label={tr(locale, "Animated QR scanner preview", "एनिमेटेड क्यूआर स्कैनर पूर्वावलोकन")}>
-              <span className="scanner-corner corner-top-left" /><span className="scanner-corner corner-top-right" /><span className="scanner-corner corner-bottom-left" /><span className="scanner-corner corner-bottom-right" />
-              <QrCode size={144} strokeWidth={1.4} aria-hidden="true" />
-              <i className="scanner-beam" />
-            </div>
-            <p>{tr(locale, "Place the QR code printed on the bottle label inside the frame.", "बोतल के लेबल पर छपे क्यूआर कोड को फ्रेम के अंदर रखें।")}</p>
-            <Link className="button button-primary button-block scanner-demo-button" href={`/verify?trace=${TRACE_ID}`} onClick={() => setScannerOpen(false)}>{tr(locale, "Try demo bottle", "डेमो बोतल आज़माएँ")} <ArrowRight size={18} /></Link>
-            <small>{tr(locale, "Demo mode opens a sample verified bottle. Camera access is not required.", "डेमो मोड एक नमूना सत्यापित बोतल खोलता है। कैमरा अनुमति आवश्यक नहीं है।")}</small>
-          </section>
-        </div>
-      )}
+      {scannerOpen && <QrScanner demoTraceId={TRACE_ID} onClose={() => { setScannerOpen(false); scannerTriggerRef.current?.focus(); }} onScan={(traceId) => { setScannerOpen(false); router.push(`/verify?trace=${encodeURIComponent(traceId)}`); }} />}
     </main>
   );
 }

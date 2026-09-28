@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  BEEKEEPER
+  MANUFACTURER
+  LAB
+  CONSUMER
+  ADMIN
+}
+
+enum OrganizationKind {
+  PRODUCER_COLLECTIVE
+  MANUFACTURER
+  LABORATORY
+  CONSUMER
+  GOVERNANCE
+}
+
+enum BatchStatus {
+  DRAFT
+  SEALED
+  IN_TRANSIT
+  LAB_APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum ListingCategory {
+  HIVE_COLONY_ASSET
+  RAW_HONEY_BATCH
+  PACKAGED_HONEY
+}
+
+enum ListingStatus {
+  ACTIVE
+  RESERVED
+  SOLD
+  ARCHIVED
+}
+
+enum AuditRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum AnomalyStatus {
+  OPEN_REVIEW
+  INVESTIGATING
+  RESOLVED
+}
+
+model Organization {
+  id           String           @id
+  name         String           @unique
+  kind         OrganizationKind
+  location     String
+  createdAt    DateTime         @default(now())
+  users        User[]
+  hives        Hive[]
+  batches      Batch[]          @relation("BatchProducer")
+  processing   ProcessingRun[]  @relation("Processor")
+  labTests     LabTest[]        @relation("Laboratory")
+  listings     Listing[]
+  auditRequests AuditRequest[]  @relation("AuditRequesterOrganization")
+  anomalies    Anomaly[]
+  provenanceEvents ProvenanceEvent[]
+  ledgerReceipts LedgerReceipt[] @relation("ReceiptOrganization")
+}
+
+model User {
+  id             String       @id
+  organizationId String
+  email          String       @unique
+  name           String
+  role           UserRole
+  passwordHash   String
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  sessions       Session[]
+  orders         Order[]      @relation("OrderBuyer")
+  savedListings  ListingSave[]
+  auditRequests  AuditRequest[] @relation("AuditRequester")
+  provenanceEvents ProvenanceEvent[] @relation("ProvenanceActor")
+  ledgerReceipts LedgerReceipt[] @relation("ReceiptActor")
+
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Hive {
+  id             String       @id
+  organizationId String
+  name           String
+  species        String
+  location       String
+  frameCount     Int
+  healthStatus   String
+  registeredAt   DateTime
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  telemetry      Telemetry[]
+  batches        BatchHive[]
+  listings       Listing[]
+
+  @@index([organizationId])
+}
+
+model Telemetry {
+  id             String   @id
+  hiveId         String
+  capturedAt     DateTime
+  temperatureC Decimal @db.Decimal(5, 2)
+  humidityPct Decimal @db.Decimal(5, 2)
+  weightKg       Decimal? @db.Decimal(7, 2)
+  batteryPct     Decimal? @db.Decimal(5, 2)
+  deviceId       String
+  source         String
+  idempotencyKey String   @unique
+  hive           Hive     @relation(fields: [hiveId], references: [id], onDelete: Cascade)
+
+  @@index([hiveId, capturedAt])
+  @@index([deviceId, capturedAt])
+}
+
+model Batch {
+  id             String       @id
+  producerId     String
+  name           String
+  floralProfile  String
+  origin         String
+  harvestedAt    DateTime
+  quantityKg     Decimal      @db.Decimal(10, 2)
+  status         BatchStatus
+  producer       Organization @relation("BatchProducer", fields: [producerId], references: [id])
+  hives          BatchHive[]
+  processingRuns ProcessingRun[]
+  labTests       LabTest[]
+  bottles        Bottle[]
+  listings       Listing[]
+  provenanceEvents ProvenanceEvent[]
+
+  @@index([producerId])
+}
+
+model BatchHive {
+  batchId String
+  hiveId  String
+  batch   Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  hive    Hive  @relation(fields: [hiveId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, hiveId])
+}
+
+model ProcessingRun {
+  id              String       @id
+  batchId         String
+  processorId     String
+  startedAt       DateTime
+  completedAt     DateTime?
+  inputKg         Decimal      @db.Decimal(10, 2)
+  outputKg        Decimal?     @db.Decimal(10, 2)
+  method          String
+  batch           Batch        @relation(fields: [batchId], references: [id])
+  processor       Organization @relation("Processor", fields: [processorId], references: [id])
+  bottles         Bottle[]
+  provenanceEvents ProvenanceEvent[]
+
+  @@index([batchId])
+  @@index([processorId])
+}
+
+model LabTest {
+  id             String       @id
+  batchId        String
+  laboratoryId   String
+  requestedAt    DateTime
+  reviewedAt     DateTime?
+  pollenProfile  String
+  moisturePct    Decimal      @db.Decimal(5, 2)
+  adulteration   String
+  status         String
+  notes          String?
+  batch          Batch        @relation(fields: [batchId], references: [id])
+  laboratory     Organization @relation("Laboratory", fields: [laboratoryId], references: [id])
+  certificate    Certificate?
+
+  @@index([batchId])
+  @@index([laboratoryId])
+}
+
+model Certificate {
+  id          String   @id
+  labTestId   String   @unique
+  number      String   @unique
+  issuedAt    DateTime
+  signer      String
+  documentUrl String?
+  sha256      String
+  labTest     LabTest  @relation(fields: [labTestId], references: [id], onDelete: Cascade)
+}
+
+model Bottle {
+  id              String       @id
+  traceId         String       @unique
+  batchId         String
+  processingRunId String?
+  productName     String
+  netWeightGrams  Int
+  packagedAt      DateTime
+  bestBefore      DateTime
+  batch           Batch        @relation(fields: [batchId], references: [id])
+  processingRun   ProcessingRun? @relation(fields: [processingRunId], references: [id])
+  listings        Listing[]
+  provenanceEvents ProvenanceEvent[]
+
+  @@index([batchId])
+}
+
+model Listing {
+  id           String          @id
+  organizationId String
+  hiveId       String?
+  batchId      String?
+  bottleId     String?
+  category     ListingCategory
+  name         String
+  location     String
+  priceInr     Int
+  unit         String
+  available    String
+  availableUnits Int           @default(0)
+  floralProfile String
+  rating       Decimal         @db.Decimal(2, 1)
+  description  String
+  traceLabel   String
+  status       ListingStatus   @default(ACTIVE)
+  accent       String
+  createdAt    DateTime        @default(now())
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  hive         Hive?           @relation(fields: [hiveId], references: [id])
+  batch        Batch?          @relation(fields: [batchId], references: [id])
+  bottle       Bottle?         @relation(fields: [bottleId], references: [id])
+  saves        ListingSave[]
+  orders       Order[]
+
+  @@index([organizationId])
+  @@index([status, category])
+}
+
+model ListingSave {
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+}
+
+model Order {
+  id        String   @id
+  listingId String
+  buyerId   String
+  quantity  Int
+  totalInr  Int
+  status    String
+  createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  buyer     User     @relation("OrderBuyer", fields: [buyerId], references: [id])
+
+  @@index([buyerId])
+  @@index([listingId])
+}
+
+model AuditRequest {
+  id                      String             @id
+  requesterId             String?
+  requesterOrganizationId String?
+  traceId                 String
+  name                    String
+  email                   String
+  reason                  String
+  consent                 Boolean
+  status                  AuditRequestStatus @default(PENDING)
+  expiresAt               DateTime?
+  createdAt               DateTime           @default(now())
+  decidedAt               DateTime?
+  requester               User?              @relation("AuditRequester", fields: [requesterId], references: [id])
+  requesterOrganization   Organization?      @relation("AuditRequesterOrganization", fields: [requesterOrganizationId], references: [id])
+
+  @@index([traceId, email])
+}
+
+model Anomaly {
+  id             String        @id
+  organizationId String
+  subjectId      String
+  title          String
+  priority       String
+  summary        String
+  response       String?
+  resolution     String?
+  status         AnomalyStatus @default(OPEN_REVIEW)
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+}
+
+model ProvenanceEvent {
+  id              String   @id
+  organizationId  String
+  actorId         String?
+  batchId         String?
+  processingRunId String?
+  bottleId        String?
+  type            String
+  occurredAt      DateTime
+  publicSummary   String
+  protectedData   Json?
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  actor           User?        @relation("ProvenanceActor", fields: [actorId], references: [id])
+  batch           Batch?       @relation(fields: [batchId], references: [id])
+  processingRun   ProcessingRun? @relation(fields: [processingRunId], references: [id])
+  bottle          Bottle?      @relation(fields: [bottleId], references: [id])
+  receipt         LedgerReceipt?
+
+  @@index([batchId, occurredAt])
+  @@index([bottleId, occurredAt])
+}
+
+model LedgerReceipt {
+  id                String    @id
+  sequence          Int       @unique
+  organizationId    String
+  actorId           String?
+  provenanceEventId String    @unique
+  payload           Json
+  previousHash      String?
+  hash              String    @unique
+  createdAt         DateTime  @default(now())
+  organization      Organization @relation("ReceiptOrganization", fields: [organizationId], references: [id])
+  actor             User?     @relation("ReceiptActor", fields: [actorId], references: [id])
+  provenanceEvent   ProvenanceEvent @relation(fields: [provenanceEventId], references: [id], onDelete: Restrict)
+  block             LedgerBlock?
+
+  @@index([createdAt])
+}
+
+model LedgerBlock {
+  id           String   @id
+  height       Int      @unique
+  receiptId    String   @unique
+  eventHash    String
+  previousHash String?
+  hash         String   @unique
+  validatorId  String
+  signature    String
+  consensus    String   @default("LOCAL_POA")
+  createdAt    DateTime @default(now())
+  receipt      LedgerReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+}

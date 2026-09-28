@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -24,6 +24,11 @@ export const metadata: Metadata = {
     icon: "/BeeTech.png",
     apple: "/BeeTech.png",
   },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#f8f5ed",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

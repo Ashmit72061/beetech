@@ -3,8 +3,8 @@ import Link from "next/link";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link className={`brand ${compact ? "brand-compact" : ""}`} href="/" aria-label="BeeTech home">
-      <Image className="brand-logo" src="/BeeTech.png" alt="BeeTech" width={176} height={48} priority />
+    <Link className={`brand ${compact ? "brand-compact" : ""}`} href="/" aria-label="Honey Chain home, by BeeTech">
+      <Image className="brand-logo" src="/BeeTech.png" alt="BeeTech, Honey Chain platform" width={176} height={48} priority />
     </Link>
   );
 }

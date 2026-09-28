@@ -1,0 +1,70 @@
+name: honey-chain-demo
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: honey_chain_demo
+      POSTGRES_USER: honey_chain
+      POSTGRES_PASSWORD: honey_chain_demo
+    ports:
+      - "55432:5432"
+    volumes:
+      - honey_chain_demo_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U honey_chain -d honey_chain_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  migrate:
+    build:
+      context: .
+      target: migration
+    command: npm run db:setup
+    environment:
+      DATABASE_URL: postgresql://honey_chain:honey_chain_demo@db:5432/honey_chain_demo?schema=public
+      IOT_INGEST_TOKEN: ${IOT_INGEST_TOKEN:-honey-chain-local-iot-demo}
+      PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN:-http://localhost:3001}
+      LOCAL_BLOCKCHAIN_VALIDATOR_ID: ${LOCAL_BLOCKCHAIN_VALIDATOR_ID:-HC-POA-VALIDATOR-01}
+      LOCAL_BLOCKCHAIN_VALIDATOR_SECRET: ${LOCAL_BLOCKCHAIN_VALIDATOR_SECRET:-honey-chain-local-validator-demo-secret}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: postgresql://honey_chain:honey_chain_demo@db:5432/honey_chain_demo?schema=public
+      IOT_INGEST_TOKEN: ${IOT_INGEST_TOKEN:-honey-chain-local-iot-demo}
+      PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN:-http://localhost:3001}
+      DEMO_MODE: "true"
+      LOCAL_BLOCKCHAIN_VALIDATOR_ID: ${LOCAL_BLOCKCHAIN_VALIDATOR_ID:-HC-POA-VALIDATOR-01}
+      LOCAL_BLOCKCHAIN_VALIDATOR_SECRET: ${LOCAL_BLOCKCHAIN_VALIDATOR_SECRET:-honey-chain-local-validator-demo-secret}
+    ports:
+      - "${APP_PORT:-3001}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  telemetry:
+    build:
+      context: .
+      target: migration
+    command: npm run simulate:telemetry -- --once
+    environment:
+      TELEMETRY_ENDPOINT: http://app:3000/api/telemetry
+      IOT_INGEST_TOKEN: ${IOT_INGEST_TOKEN:-honey-chain-local-iot-demo}
+    depends_on:
+      app:
+        condition: service_healthy
+    profiles: ["tools"]
+    restart: "no"
+
+volumes:
+  honey_chain_demo_data:

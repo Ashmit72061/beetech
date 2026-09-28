@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { credentials, Listing, Role, roleMeta } from "@/lib/data";
+import { Listing, Role } from "@/lib/data";
 
 export type Session = {
   email: string;
@@ -92,51 +92,10 @@ function sessionSnapshot() {
   return localStorage.getItem(SESSION_KEY) || "";
 }
 
-export function parseSession(raw: string): Session | null {
-  if (!raw) return null;
-  try {
-    const session = JSON.parse(raw) as Session;
-    const account = credentials.find((item) => item.email === session.email);
-    if (!account || !(session.activeRole in roleMeta) || session.accountRole !== account.role) return null;
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-export function useSession() {
-  const raw = useSyncExternalStore(subscribeSession, sessionSnapshot, () => "");
-  return useMemo(() => parseSession(raw), [raw]);
-}
-
-export function signInAccount(role: Role, email: string) {
-  const account = credentials.find((item) => item.role === role && item.email === email);
-  if (!account) return false;
-  const session: Session = {
-    email: account.email,
-    accountRole: account.role,
-    activeRole: account.role,
-    person: account.person,
-    organisation: account.organisation,
-    signedInAt: new Date().toISOString(),
-  };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  localStorage.removeItem("hc_role");
-  localStorage.removeItem("hc_email");
-  emit("hc-session-change");
-  return true;
-}
-
-export function switchActiveRole(session: Session, activeRole: Role) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session, activeRole }));
-  emit("hc-session-change");
-}
-
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem("hc_role");
-  localStorage.removeItem("hc_email");
-  emit("hc-session-change");
+export function useSession(): Session | null {
+  // Authentication is server-owned. Public client screens do not infer identity.
+  useSyncExternalStore(subscribeSession, sessionSnapshot, () => "");
+  return null;
 }
 
 export function accountKey(session: Session, bucket: string, role = session.activeRole) {

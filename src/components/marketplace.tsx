@@ -10,20 +10,13 @@ import {
   ShieldCheck,
   Star,
 } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Listing, ListingCategory, listings, money, roleMeta } from "@/lib/data";
+import { Listing, ListingCategory, money, roleMeta } from "@/lib/data";
 import { Field, Modal, Status, Toast, useToast } from "@/components/ui";
 import {
-  accountKey,
-  categoryAuditLabel,
-  CUSTOM_LISTINGS_KEY,
-  MarketplaceOrder,
   tr,
   useLocale,
-  useSession,
-  useStoredData,
-  writeJson,
 } from "@/lib/storage";
 
 const categories: Array<"All" | ListingCategory> = [
@@ -33,8 +26,6 @@ const categories: Array<"All" | ListingCategory> = [
   "Packaged Honey",
 ];
 const noListings: Listing[] = [];
-const noIds: string[] = [];
-const noOrders: MarketplaceOrder[] = [];
 
 function ProductArt({ listing }: { listing: Listing }) {
   const type =
@@ -57,14 +48,12 @@ function ProductArt({ listing }: { listing: Listing }) {
 
 export function Marketplace({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
-  const session = useSession();
   const { locale } = useLocale();
-  const customListings = useStoredData(CUSTOM_LISTINGS_KEY, noListings);
-  const allListings = [...listings, ...customListings];
-  const savedKey = session ? accountKey(session, "saved-listings") : "";
-  const ordersKey = session ? accountKey(session, "orders") : "";
-  const saved = useStoredData(savedKey, noIds);
-  const orders = useStoredData(ordersKey, noOrders);
+  const [allListings, setAllListings] = useState<Listing[]>(noListings);
+  const [saved, setSaved] = useState<string[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [category, setCategory] = useState<(typeof categories)[number]>("All");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("Featured");
@@ -73,8 +62,17 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
   const [confirmed, setConfirmed] = useState(false);
   const [orderReference, setOrderReference] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const toast = useToast();
+
+  async function refresh() {
+    const response = await fetch("/api/marketplace", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json() as { listings: Listing[]; saved: string[]; signedIn: boolean; role: string | null };
+    setAllListings(data.listings); setSaved(data.saved); setSignedIn(data.signedIn); setRole(data.role); setLoadingData(false);
+  }
+  useEffect(() => { const timer = window.setTimeout(() => { void refresh(); }, 0); return () => window.clearTimeout(timer); }, []);
 
   let visible = allListings.filter((listing) => {
     const categoryMatches = category === "All" || listing.category === category;
@@ -85,7 +83,7 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
   if (sort === "Top rated") visible = [...visible].sort((a, b) => b.rating - a.rating);
 
   function beginOrder(listing: Listing) {
-    if (!session) {
+    if (!signedIn) {
       router.push("/login?next=/marketplace");
       return;
     }
@@ -95,38 +93,26 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
     setQuantity(1);
   }
 
-  function placeOrder(event: React.FormEvent<HTMLFormElement>) {
+  async function placeOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ordering) return;
-    const reference = `HC-ORD-${Date.now().toString().slice(-6)}`;
-    if (!session) return;
-    const order: MarketplaceOrder = {
-      id: reference,
-      category: ordering.category,
-      listingId: ordering.id,
-      item: ordering.name,
-      buyerEmail: session.email,
-      buyerRole: session.activeRole,
-      buyerOrganisation: session.activeRole === session.accountRole ? session.organisation : roleMeta[session.activeRole].org,
-      seller: ordering.seller,
-      quantity,
-      total: ordering.price * quantity,
-      timestamp: new Date().toISOString(),
-      auditEvent: categoryAuditLabel(ordering.category),
-      status: "Confirmed",
-    };
-    writeJson(ordersKey, [order, ...orders]);
-    setOrderReference(reference);
-    setConfirmed(true);
-    toast.show("Order recorded and traceability event created");
+    setSubmitting(true);
+    const response = await fetch("/api/workflow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "order", listingId: ordering.id, quantity }) });
+    const data = await response.json() as { error?: string; orderId?: string; message?: string };
+    setSubmitting(false);
+    if (!response.ok) { toast.show(data.error || "Order could not be recorded"); return; }
+    setOrderReference(data.orderId || "Confirmed"); setConfirmed(true); toast.show(data.message || "Order recorded"); void refresh();
   }
 
-  function toggleSaved(id: string) {
-    if (!session) {
+  async function toggleSaved(id: string) {
+    if (!signedIn) {
       router.push("/login?next=/marketplace");
       return;
     }
-    writeJson(savedKey, saved.includes(id) ? saved.filter((item) => item !== id) : [...saved, id]);
+    const response = await fetch("/api/marketplace", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ listingId: id }) });
+    if (!response.ok) { toast.show("Could not update saved products"); return; }
+    const data = await response.json() as { saved: boolean };
+    setSaved((current) => data.saved ? [...current, id] : current.filter((item) => item !== id));
   }
 
   return (
@@ -139,8 +125,8 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
             <p>{tr(locale, "Registered colonies, traceable harvests and bottle-level verified honey.", "पंजीकृत कॉलोनी, खोज-योग्य कटाई और बोतल-स्तरीय सत्यापित शहद।")}</p>
           </div>
           <div className="market-stat">
-            <strong>126</strong>
-            <span>active verified listings</span>
+            <strong>{loadingData ? "..." : allListings.length}</strong>
+            <span>demo scenario listings in the live database</span>
           </div>
         </div>
       )}
@@ -180,7 +166,7 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
       </div>
 
       <div className="market-meta">
-        <span>{visible.length} listings match your search</span>
+        <span>{loadingData ? "Loading verified listings..." : `${visible.length} listings match your search`}</span>
         <span><ShieldCheck size={16} /> Every listing is identity checked</span>
       </div>
 
@@ -284,7 +270,7 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
                 <input type="number" min="1" max="50" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} required />
               </Field>
               <Field label={tr(locale, "Active buyer role", "सक्रिय खरीदार भूमिका")}>
-                <input value={session ? roleMeta[session.activeRole].label : ""} readOnly />
+                <input value={role ? roleMeta[role as keyof typeof roleMeta]?.label || role : ""} readOnly />
               </Field>
             </div>
             <Field label={tr(locale, "Delivery contact", "डिलीवरी संपर्क")}>
@@ -294,7 +280,7 @@ export function Marketplace({ compact = false }: { compact?: boolean }) {
               <input type="text" defaultValue="Indiranagar, Bengaluru, Karnataka" required />
             </Field>
             <div className="order-note"><ShieldCheck size={18} /><span>This order adds the correct ownership, custody or consumer-sale event to the product record.</span></div>
-            <button className="button button-primary button-block" type="submit">{tr(locale, "Confirm order", "ऑर्डर की पुष्टि करें")} · {money(ordering.price * quantity)}</button>
+            <button className="button button-primary button-block" type="submit" disabled={submitting}>{submitting ? "Recording..." : `${tr(locale, "Confirm order", "ऑर्डर की पुष्टि करें")} · ${money(ordering.price * quantity)}`}</button>
           </form>
         )}
         {ordering && confirmed && (

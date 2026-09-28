@@ -25,11 +25,10 @@ export type Listing = {
 export const TRACE_ID = "HC-BK102-B260906-03-000347";
 export const BATCH_ID = "HC-BK102-B260906-03";
 
-export const credentials: Array<{
+export const demoAccounts: Array<{
   role: Role;
   title: string;
   email: string;
-  password: string;
   person: string;
   organisation: string;
 }> = [
@@ -37,7 +36,6 @@ export const credentials: Array<{
     role: "beekeeper",
     title: "Beekeeper",
     email: "beekeeper@honeychain.in",
-    password: "honey123",
     person: "Asha Devi",
     organisation: "Aravali Madhu Sakhi FPO",
   },
@@ -45,7 +43,6 @@ export const credentials: Array<{
     role: "manufacturer",
     title: "Manufacturer",
     email: "manufacturer@honeychain.in",
-    password: "honey123",
     person: "Rohan Mehta",
     organisation: "Madhur Foods",
   },
@@ -53,7 +50,6 @@ export const credentials: Array<{
     role: "lab",
     title: "Laboratory",
     email: "lab@honeychain.in",
-    password: "honey123",
     person: "Dr. Neha Kulkarni",
     organisation: "Bharat Quality Labs",
   },
@@ -61,7 +57,6 @@ export const credentials: Array<{
     role: "consumer",
     title: "Consumer",
     email: "consumer@honeychain.in",
-    password: "honey123",
     person: "Kavya Nair",
     organisation: "Independent buyer",
   },
@@ -69,7 +64,6 @@ export const credentials: Array<{
     role: "admin",
     title: "Administrator",
     email: "admin@honeychain.in",
-    password: "honey123",
     person: "Vikram Singh",
     organisation: "Honey Chain Governance Cell",
   },

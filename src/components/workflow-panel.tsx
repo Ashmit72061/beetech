@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import type { AuthenticatedSession } from "@/lib/auth";
+
+type State = { batches: Array<{ id: string; name: string; status: string }>; runs: Array<{ id: string; batchId: string; method: string }>; tests: Array<{ id: string; batchId: string; status: string; certificate?: { number: string } | null }>; bottles: Array<{ id: string; traceId: string; productName: string }>; orders: Array<{ id: string; quantity: number; status: string; listing: { name: string } }>; requests: Array<{ id: string; traceId: string; email: string; status: string; reason: string }> };
+
+export function WorkflowPanel({ session }: { session: AuthenticatedSession }) {
+  const [state, setState] = useState<State | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [generated, setGenerated] = useState<{ traceIds: string[]; batchId: string; labelsUrl: string } | null>(null);
+  async function load() { try { setError(""); const response = await fetch("/api/workflow", { cache: "no-store" }); if (!response.ok) throw new Error("Workflow records could not be loaded."); setState(await response.json() as State); } catch (reason) { setError(reason instanceof Error ? reason.message : "Workflow records could not be loaded."); } }
+  useEffect(() => { void load(); }, []);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setNotice(""); setError("");
+    try {
+      const form = new FormData(event.currentTarget); const body = Object.fromEntries(form.entries());
+      const response = await fetch("/api/workflow", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const data = await response.json() as { message?: string; error?: string; traceId?: string; traceIds?: string[]; batchId?: string; labelsUrl?: string };
+      if (!response.ok) throw new Error(data.error || "Workflow could not be completed.");
+      setNotice(data.message || "Workflow updated.");
+      if (data.traceId && data.batchId) setGenerated({ traceIds: data.traceIds || [data.traceId], batchId: data.batchId, labelsUrl: data.labelsUrl || `/labels?batch=${encodeURIComponent(data.batchId)}` });
+      event.currentTarget.reset(); void load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Workflow could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function resetDemo() { setResetting(true); setNotice(""); try { const response = await fetch("/api/demo/reset", { method: "POST" }); const data = await response.json() as { message?: string; error?: string }; if (!response.ok) throw new Error(data.error || "Reset failed."); setNotice(data.message || "Demo data reset successfully."); void load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Reset failed."); } finally { setResetting(false); } }
+  if (!state) return <section className="panel workflow-state"><p role="status">Loading accountable workflow records...</p>{error && <><p role="alert" className="telemetry-error">{error}</p><button className="button button-outline" type="button" onClick={() => void load()}>Try again</button></>}</section>;
+  const select = (name: string, items: Array<{ id: string }>) => <select name={name} required><option value="">Select a record</option>{items.map((item) => <option value={item.id} key={item.id}>{item.id}</option>)}</select>;
+  return <section className="panel" aria-label="Live workflow actions"><div className="panel-heading"><div><span className="eyebrow">Server-backed operations</span><h2>Golden path</h2></div><span className="status">Database and ledger backed</span></div>
+    <p className="workflow-intro">Demo scenario: complete the numbered action for your role. Each submitted action writes to the isolated database and hash-chain ledger.</p>
+    {notice && <p className="workflow-notice" aria-live="polite">{notice}</p>}{error && <p className="telemetry-error" role="alert">{error}</p>}
+    {generated && <section className="qr-result" aria-label="Generated bottle QR codes"><div className="qr-result-head"><div><span className="eyebrow">Blockchain committed</span><h3>{generated.traceIds.length} printable bottle {generated.traceIds.length === 1 ? "identity" : "identities"}</h3><p>Each QR resolves to its own bottle journey and local PoA block proof.</p></div><Link className="button button-dark" href={generated.labelsUrl}>Open QR label sheet</Link></div><div className="qr-result-grid">{generated.traceIds.slice(0, 6).map((traceId) => <article key={traceId}><Image src={`/api/qr/${encodeURIComponent(traceId)}`} width={140} height={140} unoptimized alt={`QR code for ${traceId}`} /><strong>{traceId}</strong><Link href={`/verify?trace=${encodeURIComponent(traceId)}`}>View chain</Link><a href={`/api/qr/${encodeURIComponent(traceId)}`} download={`${traceId}.png`}>Download PNG</a></article>)}</div>{generated.traceIds.length > 6 && <p>All {generated.traceIds.length} labels are available on the printable sheet.</p>}</section>}
+    {session.role === "beekeeper" && <div className="form-grid"><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="harvest" /><strong>1. Record harvest</strong><input name="name" placeholder="Harvest name" required /><input name="floralProfile" placeholder="Floral profile" required /><input name="origin" placeholder="Origin" required /><input name="quantityKg" type="number" min="1" placeholder="kg" required /><button className="button button-primary" disabled={busy}>Record harvest</button></form><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="publishRaw" /><strong>2. Publish raw listing</strong>{select("batchId", state.batches)}<input name="priceInr" type="number" min="1" placeholder="INR per kg" required /><button className="button button-primary" disabled={busy}>Publish raw honey</button></form></div>}
+    {session.role === "manufacturer" && <div className="form-grid"><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="startRun" /><strong>3. Start processing</strong>{select("batchId", state.batches)}<input name="inputKg" type="number" min="1" placeholder="Input kg" required /><input name="method" placeholder="Processing method" required /><button className="button button-primary" disabled={busy}>Start run</button></form><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="requestTest" /><strong>4. Request lab test</strong>{select("runId", state.runs)}<input name="laboratoryId" defaultValue="org-bharat" readOnly /><button className="button button-primary" disabled={busy}>Send to lab queue</button></form><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="package" /><strong>5. Generate bottle QR identities</strong>{select("runId", state.runs)}<input name="productName" defaultValue="Honey Chain Honey" required /><label className="field">Net weight per bottle (g)<input name="netWeightGrams" type="number" defaultValue="500" min="1" required /></label><label className="field">Bottle count (max 24 per demo run)<input name="count" type="number" defaultValue="3" min="1" max="24" required /></label><button className="button button-primary" disabled={busy}>{busy ? "Committing blocks..." : "Generate IDs + QR codes"}</button></form><form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="publishPackaged" /><strong>6. Publish bottle</strong>{select("bottleId", state.bottles)}<input name="priceInr" type="number" defaultValue="449" required /><button className="button button-primary" disabled={busy}>Publish packaged honey</button></form></div>}
+    {session.role === "lab" && <form className="form-stack" onSubmit={submit}><input type="hidden" name="action" value="reviewTest" /><strong>Laboratory review</strong>{select("testId", state.tests)}<select name="decision"><option>Approved</option><option>Rejected</option></select><input name="pollenProfile" defaultValue="Conforms" required /><input name="moisturePct" type="number" step="0.1" defaultValue="17.4" required /><input name="adulteration" defaultValue="Not detected" required /><input name="certificateNumber" placeholder="Certificate number (approval)" /><input name="notes" placeholder="Reviewer notes" /><button className="button button-primary" disabled={busy}>Persist review and certificate</button></form>}
+    {session.role === "admin" && <div className="approval-list">{state.requests.map((request) => <form key={request.id} onSubmit={submit}><input type="hidden" name="action" value="decideAudit" /><input type="hidden" name="requestId" value={request.id} /><strong>{request.traceId}</strong><span>{request.email} · {request.status}</span><button className="button button-primary" name="decision" value="APPROVED" disabled={busy}>Approve 7 days</button><button className="button button-danger" name="decision" value="DENIED" disabled={busy}>Deny</button></form>)}</div>}
+    {session.role === "admin" && <div className="demo-reset"><strong>Demo-only administrator control</strong><p>Restore the isolated Docker demo database to its deterministic seed. This cannot affect a non-demo environment.</p><button className="button button-outline" type="button" onClick={resetDemo} disabled={resetting}>{resetting ? "Resetting demo data..." : "Reset deterministic demo data"}</button></div>}
+    {session.role === "consumer" && <p>Your confirmed database-backed orders: {state.orders.length}. Purchase packaged honey from the marketplace to append a terminal sale event.</p>}
+  </section>;
+}
